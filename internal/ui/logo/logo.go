@@ -314,6 +314,42 @@ func letterU(stretch bool) string {
 	)
 }
 
+// letterY renders the letter U in a stylized way. It takes an integer that
+// determines how many cells to stretch the letter. If the stretch is less than
+// 1, it defaults to no stretching.
+func letterY(stretch bool) string {
+	// Here's what we're making:
+	//
+	// █   █
+	//  ▀▄▀
+	//	 ▀
+
+	side := heredoc.Doc(`
+        █
+
+ 	`)
+	inside := heredoc.Doc(`
+
+        ▀
+
+	`)
+	middle := heredoc.Doc(`
+
+        ▄
+		▀
+	`)
+	return joinLetterform(
+		side,
+		stretchLetterformPart(middle, letterformProps{
+			stretch:    stretch,
+			width:      3,
+			minStretch: 7,
+			maxStretch: 12,
+		}),
+		side,
+	)
+}
+
 func joinLetterform(letters ...string) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, letters...)
 }
