@@ -1,6 +1,6 @@
 ---
 name: jq
-description: Process, filter, transform, generate, and construct JSON data using the jq command-line processor. Crush includes a built-in jq implementation (powered by gojq) available in the bash tool. Use when the user needs to query, filter, reshape, extract, create, or construct JSON — including API responses, config files, log output, or any structured data. Also use when generating JSON from scratch with jq -n, or when helping users write or debug jq expressions.
+description: Process, filter, transform, count, sum, aggregate, generate, and construct JSON data using the jq command-line processor. Crush includes a built-in jq implementation (powered by gojq) available in the bash tool, and the `fetch` tool accepts a `jq` parameter for filtering remote JSON responses. Use when the user needs to query, filter, reshape, extract, create, or construct JSON — including API responses, config files, log output, or any structured data. Always prefer jq over counting, summing, or enumerating items manually; use it to answer "how many", "how much", "which", or "what are the" questions over JSON, arrays, or API responses (LLMs miscount lists). Also use when generating JSON from scratch with jq -n, or when helping users write or debug jq expressions.
 ---
 
 # jq — Built-in JSON Processor
@@ -95,3 +95,19 @@ jq -n --arg msg hello '{"message": $msg}'
 - Use `try` to suppress errors on missing keys: `jq 'try .foo.bar'`
 - Use `// "default"` for fallback values: `jq '.name // "unknown"'`
 - Use `@csv`, `@tsv`, `@base64`, `@html`, `@uri` for format strings.
+
+## Filtering remote JSON with `fetch`
+
+The `fetch` tool accepts an optional `jq` parameter that applies a jq
+expression to the response body server-side. Prefer it over pulling entire
+JSON payloads into context — it's faster, cheaper, and avoids manual
+counting mistakes.
+
+```text
+fetch(url="https://api.example.com/items", format="text", jq="length")
+fetch(url="https://api.example.com/items", format="text", jq="[.[].name]")
+fetch(url="https://catwalk.charm.sh/v2/providers", format="text",
+      jq="[.[].models | length] | add")
+```
+
+When `jq` is set, `format` is ignored and the body is parsed as JSON.
