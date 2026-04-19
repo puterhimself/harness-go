@@ -4,14 +4,17 @@ import (
 	"fmt"
 	"image/color"
 	"io"
-	"strings"
 
 	"charm.land/lipgloss/v2"
 	"github.com/alecthomas/chroma/v2"
-	"github.com/charmbracelet/crush/internal/ansiext"
+	"github.com/alecthomas/chroma/v2/formatters"
 )
 
 var _ chroma.Formatter = chromaFormatter{}
+
+func init() {
+	formatters.Register("crush", chromaFormatter{})
+}
 
 // chromaFormatter is a custom formatter for Chroma that uses Lip Gloss for
 // foreground styling, while keeping a forced background color.
@@ -22,8 +25,10 @@ type chromaFormatter struct {
 // Format implements the chroma.Formatter interface.
 func (c chromaFormatter) Format(w io.Writer, style *chroma.Style, it chroma.Iterator) error {
 	for token := it(); token != chroma.EOF; token = it() {
-		value := strings.TrimRight(token.Value, "\n")
-		value = ansiext.Escape(value)
+		value := token.Value
+		// value = strings.TrimRight(value, "\n")
+		// value = strings.TrimRight(value, ansiext.Escape("\n"))
+		// value = ansiext.Escape(value)
 
 		entry := style.Get(token.Type)
 		if entry.IsZero() {

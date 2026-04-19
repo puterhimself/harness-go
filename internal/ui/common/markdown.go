@@ -11,6 +11,7 @@ func MarkdownRenderer(sty *styles.Styles, width int) *glamour.TermRenderer {
 	r, _ := glamour.NewTermRenderer(
 		glamour.WithStyles(sty.Markdown),
 		glamour.WithWordWrap(width),
+		glamour.WithChromaFormatter("crush"),
 	)
 	return r
 }
@@ -21,6 +22,7 @@ func PlainMarkdownRenderer(sty *styles.Styles, width int) *glamour.TermRenderer 
 	r, _ := glamour.NewTermRenderer(
 		glamour.WithStyles(sty.PlainMarkdown),
 		glamour.WithWordWrap(width),
+		glamour.WithChromaFormatter("crush"),
 	)
 	return r
 }
