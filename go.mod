@@ -79,6 +79,14 @@ require (
 )
 
 require (
+	github.com/XiaoConstantine/mcp-go v0.3.1 // indirect
+	github.com/anthropics/anthropic-sdk-go v1.33.0 // indirect
+	github.com/mattn/go-sqlite3 v1.14.42 // indirect
+	github.com/sourcegraph/conc v0.3.0 // indirect
+	github.com/traefik/yaegi v0.16.1 // indirect
+)
+
+require (
 	cloud.google.com/go v0.123.0 // indirect
 	cloud.google.com/go/auth v0.20.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
@@ -87,6 +95,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
 	github.com/KyleBanks/depth v1.2.1 // indirect
+	github.com/XiaoConstantine/dspy-go v0.0.0
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.41.5 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.8 // indirect
@@ -152,7 +161,7 @@ require (
 	github.com/kaptinlin/jsonschema v0.7.7 // indirect
 	github.com/kaptinlin/messageformat-go v0.4.19 // indirect
 	github.com/klauspost/compress v1.18.5 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
+	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-runewidth v0.0.23 // indirect
@@ -180,7 +189,7 @@ require (
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/swaggo/files/v2 v2.0.0 // indirect
 	github.com/tadvi/systray v0.0.0-20190226123456-11a2b8fa57af // indirect
-	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/match v1.2.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/u-root/u-root v0.14.1-0.20250807200646-5e7721023dc7 // indirect
 	github.com/u-root/uio v0.0.0-20240224005618-d2acac8f3701 // indirect
@@ -218,3 +227,5 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
+
+replace github.com/XiaoConstantine/dspy-go => ../dspy-go

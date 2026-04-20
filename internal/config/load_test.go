@@ -469,10 +469,12 @@ func TestConfig_setupAgentsWithNoDisabledTools(t *testing.T) {
 	coderAgent, ok := cfg.Agents[AgentCoder]
 	require.True(t, ok)
 	assert.Equal(t, allToolNames(), coderAgent.AllowedTools)
+	assert.Equal(t, string(AgentRuntimeDefault), coderAgent.Runtime)
 
 	taskAgent, ok := cfg.Agents[AgentTask]
 	require.True(t, ok)
 	assert.Equal(t, []string{"glob", "grep", "ls", "sourcegraph", "view"}, taskAgent.AllowedTools)
+	assert.Equal(t, string(AgentRuntimeDefault), taskAgent.Runtime)
 }
 
 func TestConfig_setupAgentsWithDisabledTools(t *testing.T) {

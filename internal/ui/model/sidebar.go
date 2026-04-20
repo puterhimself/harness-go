@@ -151,8 +151,11 @@ func (m *UI) drawSidebar(scr uv.Screen, area uv.Rectangle) {
 		cwd,
 		"",
 		m.modelInfo(width),
-		"",
 	}
+	if runtimeInfo := m.runtimeSummaryInfo(width, true); runtimeInfo != "" {
+		blocks = append(blocks, "", runtimeInfo)
+	}
+	blocks = append(blocks, "")
 
 	sidebarHeader := lipgloss.JoinVertical(
 		lipgloss.Left,

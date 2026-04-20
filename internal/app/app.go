@@ -543,18 +543,37 @@ func (app *App) InitCoderAgent(ctx context.Context) error {
 	if coderAgentCfg.ID == "" {
 		return fmt.Errorf("coder agent configuration is missing")
 	}
+	runtimeMode := config.NormalizeAgentRuntime(coderAgentCfg.Runtime)
+	if coderAgentCfg.Runtime != "" && !config.IsValidAgentRuntime(coderAgentCfg.Runtime) {
+		slog.Warn("Invalid agent runtime, defaulting to default", "runtime", coderAgentCfg.Runtime, "agent", coderAgentCfg.ID)
+	}
 	var err error
-	app.AgentCoordinator, err = agent.NewCoordinator(
-		ctx,
-		app.config,
-		app.Sessions,
-		app.Messages,
-		app.Permissions,
-		app.History,
-		app.FileTracker,
-		app.LSPManager,
-		app.agentNotifications,
-	)
+	switch runtimeMode {
+	case config.AgentRuntimeRLM:
+		app.AgentCoordinator, err = agent.NewRLMCoordinator(
+			ctx,
+			app.config,
+			app.Sessions,
+			app.Messages,
+			app.Permissions,
+			app.History,
+			app.FileTracker,
+			app.LSPManager,
+			app.agentNotifications,
+		)
+	default:
+		app.AgentCoordinator, err = agent.NewCoordinator(
+			ctx,
+			app.config,
+			app.Sessions,
+			app.Messages,
+			app.Permissions,
+			app.History,
+			app.FileTracker,
+			app.LSPManager,
+			app.agentNotifications,
+		)
+	}
 	if err != nil {
 		slog.Error("Failed to create coder agent", "err", err)
 		return err
@@ -603,6 +622,11 @@ func (app *App) Shutdown() {
 	// before closing the DB so agents can finish writing their state.
 	if app.AgentCoordinator != nil {
 		app.AgentCoordinator.CancelAll()
+		if closer, ok := app.AgentCoordinator.(interface{ Close() error }); ok {
+			app.cleanupFuncs = append(app.cleanupFuncs, func(context.Context) error {
+				return closer.Close()
+			})
+		}
 	}
 
 	// Now run remaining cleanup tasks in parallel.

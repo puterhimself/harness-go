@@ -29,6 +29,12 @@ type KeyMap struct {
 		Cancel         key.Binding
 		Tab            key.Binding
 		Details        key.Binding
+		RuntimePrev    key.Binding
+		RuntimeNext    key.Binding
+		RuntimeSwitch  key.Binding
+		RuntimeResume  key.Binding
+		RuntimeFork    key.Binding
+		RuntimeRefresh key.Binding
 		TogglePills    key.Binding
 		PillLeft       key.Binding
 		PillRight      key.Binding
@@ -171,6 +177,30 @@ func DefaultKeyMap() KeyMap {
 	km.Chat.Details = key.NewBinding(
 		key.WithKeys("ctrl+d"),
 		key.WithHelp("ctrl+d", "toggle details"),
+	)
+	km.Chat.RuntimePrev = key.NewBinding(
+		key.WithKeys("["),
+		key.WithHelp("[", "prev branch"),
+	)
+	km.Chat.RuntimeNext = key.NewBinding(
+		key.WithKeys("]"),
+		key.WithHelp("]", "next branch"),
+	)
+	km.Chat.RuntimeSwitch = key.NewBinding(
+		key.WithKeys("enter"),
+		key.WithHelp("enter", "switch branch"),
+	)
+	km.Chat.RuntimeResume = key.NewBinding(
+		key.WithKeys("r"),
+		key.WithHelp("r", "resume branch"),
+	)
+	km.Chat.RuntimeFork = key.NewBinding(
+		key.WithKeys("ctrl+b"),
+		key.WithHelp("ctrl+b", "fork branch"),
+	)
+	km.Chat.RuntimeRefresh = key.NewBinding(
+		key.WithKeys("R"),
+		key.WithHelp("R", "refresh runtime"),
 	)
 	km.Chat.TogglePills = key.NewBinding(
 		key.WithKeys("ctrl+t", "ctrl+space"),

@@ -144,6 +144,17 @@ type (
 	sessionFilesUpdatesMsg struct {
 		sessionFiles []SessionFile
 	}
+
+	rlmInspectionMsg struct {
+		inspection workspace.RLMRuntimeInspection
+		err        error
+	}
+
+	rlmBranchActionMsg struct {
+		action string
+		branch string
+		err    error
+	}
 )
 
 // UI represents the main user interface model.
@@ -243,6 +254,13 @@ type UI struct {
 
 	// detailsOpen tracks whether the details panel is open (in compact mode)
 	detailsOpen bool
+
+	// rlmInspection stores the latest runtime/branch inspection snapshot.
+	rlmInspection  *workspace.RLMRuntimeInspection
+	rlmUnavailable bool
+
+	// rlmSelectedBranch tracks the selected branch index in deep runtime view.
+	rlmSelectedBranch int
 
 	// pills state
 	pillsExpanded      bool
@@ -497,6 +515,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 	case loadSessionMsg:
+		m.rlmUnavailable = false
 		if m.forceCompactMode {
 			m.isCompact = true
 		}
@@ -523,7 +542,25 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Reload prompt history for the new session.
 		m.historyReset()
 		cmds = append(cmds, m.loadPromptHistory())
+		cmds = append(cmds, m.refreshRLMInspection(40))
 		m.updateLayoutAndSize()
+
+	case rlmInspectionMsg:
+		if msg.err != nil {
+			if workspace.IsRLMRuntimeUnavailable(msg.err) {
+				m.rlmInspection = nil
+				m.rlmUnavailable = true
+				break
+			}
+			cmds = append(cmds, util.ReportWarn(msg.err.Error()))
+			break
+		}
+		m.applyRLMInspection(msg.inspection)
+
+	case rlmBranchActionMsg:
+		if cmd := m.handleRLMActionResult(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 
 	case sessionFilesUpdatesMsg:
 		m.sessionFiles = msg.sessionFiles
@@ -619,6 +656,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// there is a number of things that could change the pills here so we want to re-render
 		m.renderPills()
+		cmds = append(cmds, m.refreshRLMInspection(30))
 	case pubsub.Event[history.File]:
 		cmds = append(cmds, m.handleFileEvent(msg.Payload))
 	case pubsub.Event[app.LSPEvent]:
@@ -1640,6 +1678,47 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 		case key.Matches(msg, m.keyMap.Chat.Details) && m.isCompact:
 			m.detailsOpen = !m.detailsOpen
 			m.updateLayoutAndSize()
+			if m.detailsOpen {
+				cmds = append(cmds, m.refreshRLMInspection(40))
+			}
+			return true
+		case m.runtimeActionsVisible() && key.Matches(msg, m.keyMap.Chat.RuntimePrev):
+			m.moveRLMBranchSelection(-1)
+			return true
+		case m.runtimeActionsVisible() && key.Matches(msg, m.keyMap.Chat.RuntimeNext):
+			m.moveRLMBranchSelection(1)
+			return true
+		case m.runtimeActionsVisible() && key.Matches(msg, m.keyMap.Chat.RuntimeSwitch):
+			if m.isAgentBusy() {
+				cmds = append(cmds, util.ReportWarn("Agent is busy, wait before switching branches"))
+				return true
+			}
+			if cmd := m.switchSelectedRuntimeBranch(); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+			return true
+		case m.runtimeActionsVisible() && key.Matches(msg, m.keyMap.Chat.RuntimeResume):
+			if m.isAgentBusy() {
+				cmds = append(cmds, util.ReportWarn("Agent is busy, wait before resuming branches"))
+				return true
+			}
+			if cmd := m.resumeSelectedRuntimeBranch(); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+			return true
+		case m.runtimeActionsVisible() && key.Matches(msg, m.keyMap.Chat.RuntimeFork):
+			if m.isAgentBusy() {
+				cmds = append(cmds, util.ReportWarn("Agent is busy, wait before forking branches"))
+				return true
+			}
+			if cmd := m.forkRuntimeBranch(); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+			return true
+		case m.runtimeActionsVisible() && key.Matches(msg, m.keyMap.Chat.RuntimeRefresh):
+			if cmd := m.refreshRLMInspection(50); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
 			return true
 		case key.Matches(msg, m.keyMap.Chat.TogglePills):
 			if m.state == uiChat && m.hasSession() {
@@ -2200,6 +2279,13 @@ func (m *UI) ShortHelp() []key.Binding {
 				k.Chat.PageDown,
 				k.Chat.Copy,
 			)
+			if m.runtimeActionsVisible() {
+				binds = append(binds,
+					k.Chat.RuntimePrev,
+					k.Chat.RuntimeSwitch,
+					k.Chat.RuntimeFork,
+				)
+			}
 			if m.pillsExpanded && hasIncompleteTodos(m.session.Todos) && m.promptQueue > 0 {
 				binds = append(binds, k.Chat.PillLeft)
 			}
@@ -2313,6 +2399,20 @@ func (m *UI) FullHelp() [][]key.Binding {
 					k.Chat.ClearHighlight,
 				},
 			)
+			if m.runtimeActionsVisible() {
+				binds = append(binds,
+					[]key.Binding{
+						k.Chat.RuntimePrev,
+						k.Chat.RuntimeNext,
+						k.Chat.RuntimeSwitch,
+					},
+					[]key.Binding{
+						k.Chat.RuntimeResume,
+						k.Chat.RuntimeFork,
+						k.Chat.RuntimeRefresh,
+					},
+				)
+			}
 			if m.pillsExpanded && hasIncompleteTodos(m.session.Todos) && m.promptQueue > 0 {
 				binds = append(binds, []key.Binding{k.Chat.PillLeft})
 			}
@@ -3296,6 +3396,9 @@ func (m *UI) newSession() tea.Cmd {
 	m.pillsExpanded = false
 	m.promptQueue = 0
 	m.pillsView = ""
+	m.rlmInspection = nil
+	m.rlmSelectedBranch = 0
+	m.rlmUnavailable = false
 	m.historyReset()
 	agenttools.ResetCache()
 	return tea.Batch(
@@ -3541,14 +3644,25 @@ func (m *UI) drawSessionDetails(scr uv.Screen, area uv.Rectangle) {
 	remainingHeight := height - lipgloss.Height(detailsHeader) - lipgloss.Height(version)
 
 	const maxSectionWidth = 50
-	sectionWidth := max(1, min(maxSectionWidth, width/4-2)) // account for spacing between sections
-	maxItemsPerSection := remainingHeight - 3               // Account for section title and spacing
+	primarySectionWidth := max(1, min(maxSectionWidth, width/4-2)) // account for spacing between sections
+	primaryMaxItems := max(2, remainingHeight-3)                   // Account for section title and spacing.
 
-	lspSection := m.lspInfo(sectionWidth, maxItemsPerSection, false)
-	mcpSection := m.mcpInfo(sectionWidth, maxItemsPerSection, false)
-	skillsSection := m.skillsInfo(sectionWidth, maxItemsPerSection, false)
-	filesSection := m.filesInfo(m.com.Workspace.WorkingDir(), sectionWidth, maxItemsPerSection, false)
-	sections := lipgloss.JoinHorizontal(lipgloss.Top, filesSection, " ", lspSection, " ", mcpSection, " ", skillsSection)
+	lspSection := m.lspInfo(primarySectionWidth, primaryMaxItems, false)
+	mcpSection := m.mcpInfo(primarySectionWidth, primaryMaxItems, false)
+	skillsSection := m.skillsInfo(primarySectionWidth, primaryMaxItems, false)
+	filesSection := m.filesInfo(m.com.Workspace.WorkingDir(), primarySectionWidth, primaryMaxItems, false)
+	primaryRow := lipgloss.JoinHorizontal(lipgloss.Top, filesSection, " ", lspSection, " ", mcpSection, " ", skillsSection)
+
+	sections := primaryRow
+	if m.rlmInspection != nil {
+		runtimeSectionWidth := max(1, min(maxSectionWidth, width/3-2))
+		runtimeMaxItems := max(2, remainingHeight/2-3)
+		runtimeSummary := m.runtimeSummaryInfo(runtimeSectionWidth, false)
+		runtimeBranches := m.runtimeBranchesInfo(runtimeSectionWidth, runtimeMaxItems, false)
+		runtimeTrace := m.runtimeTraceInfo(runtimeSectionWidth, runtimeMaxItems, false)
+		runtimeRow := lipgloss.JoinHorizontal(lipgloss.Top, runtimeSummary, " ", runtimeBranches, " ", runtimeTrace)
+		sections = lipgloss.JoinVertical(lipgloss.Left, primaryRow, "", runtimeRow)
+	}
 	uv.NewStyledString(
 		s.CompactDetails.View.
 			Width(area.Dx()).

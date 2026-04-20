@@ -63,6 +63,31 @@ const (
 	AgentTask  string = "task"
 )
 
+type AgentRuntime string
+
+const (
+	AgentRuntimeDefault AgentRuntime = "default"
+	AgentRuntimeRLM     AgentRuntime = "rlm"
+)
+
+func NormalizeAgentRuntime(runtime string) AgentRuntime {
+	switch AgentRuntime(strings.ToLower(strings.TrimSpace(runtime))) {
+	case AgentRuntimeRLM:
+		return AgentRuntimeRLM
+	default:
+		return AgentRuntimeDefault
+	}
+}
+
+func IsValidAgentRuntime(runtime string) bool {
+	switch AgentRuntime(strings.ToLower(strings.TrimSpace(runtime))) {
+	case AgentRuntimeDefault, AgentRuntimeRLM:
+		return true
+	default:
+		return false
+	}
+}
+
 type SelectedModel struct {
 	// The model id as used by the provider API.
 	// Required.
@@ -326,6 +351,7 @@ type Agent struct {
 	ID          string `json:"id,omitempty"`
 	Name        string `json:"name,omitempty"`
 	Description string `json:"description,omitempty"`
+	Runtime     string `json:"runtime,omitempty" jsonschema:"description=Runtime mode for the agent,enum=default,enum=rlm,default=default"`
 	// This is the id of the system prompt used by the agent
 	Disabled bool `json:"disabled,omitempty"`
 
@@ -520,6 +546,7 @@ func (c *Config) SetupAgents() {
 			ID:           AgentCoder,
 			Name:         "Coder",
 			Description:  "An agent that helps with executing coding tasks.",
+			Runtime:      string(AgentRuntimeDefault),
 			Model:        SelectedModelTypeLarge,
 			ContextPaths: c.Options.ContextPaths,
 			AllowedTools: allowedTools,
@@ -529,6 +556,7 @@ func (c *Config) SetupAgents() {
 			ID:           AgentTask,
 			Name:         "Task",
 			Description:  "An agent that helps with searching for context and finding implementation details.",
+			Runtime:      string(AgentRuntimeDefault),
 			Model:        SelectedModelTypeLarge,
 			ContextPaths: c.Options.ContextPaths,
 			AllowedTools: resolveReadOnlyTools(allowedTools),
