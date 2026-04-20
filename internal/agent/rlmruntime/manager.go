@@ -315,7 +315,7 @@ func (m *Manager) SaveSession(ctx context.Context, runtime *SessionRuntime) erro
 	return nil
 }
 
-func (m *Manager) CheckpointActive(ctx context.Context, runtime *SessionRuntime, replay []string, completion NormalizedCompletion) (Checkpoint, error) {
+func (m *Manager) CheckpointActive(ctx context.Context, runtime *SessionRuntime, replay []string, completion NormalizedCompletion, trace EpisodeTrace) (Checkpoint, error) {
 	if runtime == nil {
 		return Checkpoint{}, fmt.Errorf("runtime is nil")
 	}
@@ -334,7 +334,7 @@ func (m *Manager) CheckpointActive(ctx context.Context, runtime *SessionRuntime,
 		maps.Copy(state, exported)
 	}
 
-	cp, err := m.store.WriteCheckpoint(ctx, runtime.SessionID, branch, state, replay, completion)
+	cp, err := m.store.WriteCheckpoint(ctx, runtime.SessionID, branch, state, replay, completion, trace)
 	if err != nil {
 		return Checkpoint{}, err
 	}

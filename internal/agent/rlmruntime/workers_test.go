@@ -27,7 +27,7 @@ func TestRunWorkerFromCheckpointIsolationAndCommit(t *testing.T) {
 		"done":         false,
 	}))
 
-	cp, err := manager.CheckpointActive(ctx, runtime, []string{"shared := map[string]any{\"root\": \"keep\"}"}, NormalizedCompletion{})
+	cp, err := manager.CheckpointActive(ctx, runtime, []string{"shared := map[string]any{\"root\": \"keep\"}"}, NormalizedCompletion{}, EpisodeTrace{})
 	require.NoError(t, err)
 
 	published, err := manager.RunWorkerFromCheckpoint(ctx, "session-1", runtime.State.ActiveBranchID, cp.ID, func(ctx context.Context, worker *WorkerRuntime) (PublishPayload, error) {
@@ -59,6 +59,13 @@ func TestInspectRuntimeAndJournal(t *testing.T) {
 	ctx := context.Background()
 	runtime, err := manager.LoadOrCreate(ctx, "session-1")
 	require.NoError(t, err)
+	require.NoError(t, runtime.REPL.ImportState(map[string]any{"done": true, "output_message": "done"}))
+	_, err = manager.CheckpointActive(ctx, runtime, []string{"done = true"}, NormalizedCompletion{Done: true, OutputMessage: "done"}, EpisodeTrace{
+		Iterations:       1,
+		TerminationCause: "state_done",
+		Steps:            []EpisodeTraceStep{{Index: 1, Action: "final", Observation: "done", Success: true}},
+	})
+	require.NoError(t, err)
 
 	_, err = manager.Publish(ctx, "session-1", PublishPayload{Summary: "pending"})
 	require.NoError(t, err)
@@ -67,6 +74,8 @@ func TestInspectRuntimeAndJournal(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, runtime.SessionID, inspection.Runtime.SessionID)
 	require.NotEmpty(t, inspection.Published)
+	require.Equal(t, "state_done", inspection.ActiveTrace.TerminationCause)
+	require.Len(t, inspection.ActiveTrace.Steps, 1)
 
 	entries, err := manager.InspectBranchJournal(ctx, "session-1", runtime.State.ActiveBranchID, 20)
 	require.NoError(t, err)

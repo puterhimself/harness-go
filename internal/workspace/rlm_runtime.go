@@ -31,6 +31,49 @@ type RLMRuntimeJournalEntry struct {
 	Payload   map[string]any
 }
 
+type RLMRuntimeTokenUsage struct {
+	PromptTokens     int
+	CompletionTokens int
+	TotalTokens      int
+}
+
+type RLMRuntimeRootSnapshot struct {
+	Iteration        int
+	PromptTokens     int
+	CompletionTokens int
+}
+
+type RLMRuntimeTraceStep struct {
+	Index       int
+	Thought     string
+	Action      string
+	Code        string
+	SubQuery    string
+	Observation string
+	Duration    time.Duration
+	Success     bool
+	Error       string
+}
+
+type RLMRuntimeTrace struct {
+	StartedAt         time.Time
+	CompletedAt       time.Time
+	ProcessingTime    time.Duration
+	Iterations        int
+	Usage             RLMRuntimeTokenUsage
+	RootUsage         RLMRuntimeTokenUsage
+	SubUsage          RLMRuntimeTokenUsage
+	SubRLMUsage       RLMRuntimeTokenUsage
+	RootSnapshots     []RLMRuntimeRootSnapshot
+	SubLLMCallCount   int
+	SubRLMCallCount   int
+	ConfidenceSignals int
+	CompressionCount  int
+	TerminationCause  string
+	Error             string
+	Steps             []RLMRuntimeTraceStep
+}
+
 type RLMRuntimeInspection struct {
 	SessionID         string
 	ActiveBranchID    string
@@ -49,6 +92,7 @@ type RLMRuntimeInspection struct {
 	Branches      []RLMRuntimeBranch
 	Published     []RLMRuntimePublish
 	RecentJournal []RLMRuntimeJournalEntry
+	ActiveTrace   RLMRuntimeTrace
 }
 
 func (r RLMRuntimeInspection) Clone() RLMRuntimeInspection {
@@ -64,6 +108,14 @@ func (r RLMRuntimeInspection) Clone() RLMRuntimeInspection {
 			Payload:   maps.Clone(entry.Payload),
 		})
 	}
+	cloned.ActiveTrace = cloneRLMRuntimeTrace(r.ActiveTrace)
+	return cloned
+}
+
+func cloneRLMRuntimeTrace(trace RLMRuntimeTrace) RLMRuntimeTrace {
+	cloned := trace
+	cloned.RootSnapshots = append([]RLMRuntimeRootSnapshot(nil), trace.RootSnapshots...)
+	cloned.Steps = append([]RLMRuntimeTraceStep(nil), trace.Steps...)
 	return cloned
 }
 

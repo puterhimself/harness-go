@@ -158,6 +158,10 @@ func (c *rlmCoordinator) Run(ctx context.Context, sessionID, prompt string, atta
 	rlmModule := dspyrlm.NewFromLLM(adapter,
 		dspyrlm.WithMaxIterations(30),
 		dspyrlm.WithTimeout(2*time.Minute),
+		func(cfg *dspyrlm.Config) {
+			cfg.OuterInstruction = rlmruntime.CrushRLMOuterInstruction
+			cfg.IterationInstruction = rlmruntime.CrushRLMIterationInstruction
+		},
 	)
 	if model.ModelCfg.MaxTokens > 0 {
 		rlmModule.WithOptions(dspyrlm.WithMaxTokens(int(model.ModelCfg.MaxTokens)))

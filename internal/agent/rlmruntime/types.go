@@ -55,6 +55,49 @@ type BranchState struct {
 	BranchLocal    map[string]any `json:"branch_local"`
 }
 
+type TraceTokenUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+}
+
+type TraceRootSnapshot struct {
+	Iteration        int `json:"iteration"`
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+}
+
+type EpisodeTraceStep struct {
+	Index       int           `json:"index"`
+	Thought     string        `json:"thought,omitempty"`
+	Action      string        `json:"action,omitempty"`
+	Code        string        `json:"code,omitempty"`
+	SubQuery    string        `json:"sub_query,omitempty"`
+	Observation string        `json:"observation,omitempty"`
+	Duration    time.Duration `json:"duration"`
+	Success     bool          `json:"success"`
+	Error       string        `json:"error,omitempty"`
+}
+
+type EpisodeTrace struct {
+	StartedAt         time.Time           `json:"started_at"`
+	CompletedAt       time.Time           `json:"completed_at"`
+	ProcessingTime    time.Duration       `json:"processing_time"`
+	Iterations        int                 `json:"iterations"`
+	Usage             TraceTokenUsage     `json:"usage"`
+	RootUsage         TraceTokenUsage     `json:"root_usage"`
+	SubUsage          TraceTokenUsage     `json:"sub_usage"`
+	SubRLMUsage       TraceTokenUsage     `json:"sub_rlm_usage"`
+	RootSnapshots     []TraceRootSnapshot `json:"root_snapshots,omitempty"`
+	SubLLMCallCount   int                 `json:"sub_llm_call_count"`
+	SubRLMCallCount   int                 `json:"sub_rlm_call_count"`
+	ConfidenceSignals int                 `json:"confidence_signals"`
+	CompressionCount  int                 `json:"compression_count"`
+	TerminationCause  string              `json:"termination_cause,omitempty"`
+	Error             string              `json:"error,omitempty"`
+	Steps             []EpisodeTraceStep  `json:"steps,omitempty"`
+}
+
 type Checkpoint struct {
 	ID           string    `json:"id"`
 	BranchID     string    `json:"branch_id"`
@@ -62,6 +105,7 @@ type Checkpoint struct {
 	ManifestPath string    `json:"manifest_path"`
 	StatePath    string    `json:"state_path"`
 	ReplayPath   string    `json:"replay_path"`
+	TracePath    string    `json:"trace_path"`
 	ArtifactRoot string    `json:"artifact_root"`
 }
 
@@ -74,6 +118,7 @@ type CheckpointManifest struct {
 	ReplayPath       string                 `json:"replay_path"`
 	StatePath        string                 `json:"state_path"`
 	CompletionPath   string                 `json:"completion_path"`
+	TracePath        string                 `json:"trace_path,omitempty"`
 	ArtifactRoot     string                 `json:"artifact_root"`
 	JournalOffset    int64                  `json:"journal_offset"`
 	RuntimeVariables map[string]any         `json:"runtime_variables,omitempty"`

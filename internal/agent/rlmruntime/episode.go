@@ -150,7 +150,7 @@ func (r *EpisodeRunner) Run(ctx context.Context, params EpisodeRunParams) (Episo
 			})
 		}
 
-		checkpoint, err := r.manager.CheckpointActive(episodeCtx, runtime, replayFromTrace(trace), normalized)
+		checkpoint, err := r.manager.CheckpointActive(episodeCtx, runtime, replayFromTrace(trace), normalized, traceFromRLM(trace))
 		if err != nil {
 			return err
 		}

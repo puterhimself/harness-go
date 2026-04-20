@@ -59,7 +59,11 @@ func (m *Manager) ForkBranch(ctx context.Context, sessionID, name string) (Branc
 		if err != nil {
 			return BranchState{}, err
 		}
-		checkpoint, err := m.store.WriteCheckpoint(ctx, sessionID, branch, state, replay, completion)
+		trace, err := m.store.LoadCheckpointTrace(ctx, sessionID, activeID, activeBranch.HeadCheckpoint)
+		if err != nil {
+			return BranchState{}, err
+		}
+		checkpoint, err := m.store.WriteCheckpoint(ctx, sessionID, branch, state, replay, completion, trace)
 		if err != nil {
 			return BranchState{}, err
 		}

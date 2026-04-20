@@ -66,10 +66,11 @@ func TestFileStoreCheckpointWriteLoadPromote(t *testing.T) {
 	}
 	require.NoError(t, store.SaveBranch(ctx, "session-1", branch))
 
+	trace := EpisodeTrace{Iterations: 2, TerminationCause: "state_done", Steps: []EpisodeTraceStep{{Index: 1, Action: "compute", Code: "x := 1"}}}
 	cp, err := store.WriteCheckpoint(ctx, "session-1", branch, map[string]any{
 		"task": "ship store",
 		"done": true,
-	}, []string{"x := 1", "done = true"}, NormalizedCompletion{Done: true, OutputMessage: "done"})
+	}, []string{"x := 1", "done = true"}, NormalizedCompletion{Done: true, OutputMessage: "done"}, trace)
 	require.NoError(t, err)
 	require.NotEmpty(t, cp.ID)
 
@@ -80,6 +81,11 @@ func TestFileStoreCheckpointWriteLoadPromote(t *testing.T) {
 	require.Equal(t, true, state["done"])
 	require.Equal(t, "done", completion.OutputMessage)
 	require.Equal(t, []string{"x := 1", "done = true"}, replay)
+
+	loadedTrace, err := store.LoadCheckpointTrace(ctx, "session-1", "main", cp.ID)
+	require.NoError(t, err)
+	require.Equal(t, trace.TerminationCause, loadedTrace.TerminationCause)
+	require.Len(t, loadedTrace.Steps, 1)
 
 	require.NoError(t, store.PromoteBranchHead(ctx, "session-1", "main", cp.ID))
 	head, err := store.LoadBranchHead(ctx, "session-1", "main")
@@ -104,7 +110,7 @@ func TestFileStoreCheckpointPreservesMultilineReplayBlocks(t *testing.T) {
 		"func counter() int {\n\ttotal := 0\n\tfor i := 0; i < 3; i++ {\n\t\ttotal += i\n\t}\n\treturn total\n}",
 		"value := counter()",
 	}
-	cp, err := store.WriteCheckpoint(ctx, "session-1", branch, map[string]any{"done": false}, replay, NormalizedCompletion{})
+	cp, err := store.WriteCheckpoint(ctx, "session-1", branch, map[string]any{"done": false}, replay, NormalizedCompletion{}, EpisodeTrace{})
 	require.NoError(t, err)
 
 	_, _, _, loadedReplay, err := store.LoadCheckpoint(ctx, "session-1", "main", cp.ID)

@@ -3655,13 +3655,13 @@ func (m *UI) drawSessionDetails(scr uv.Screen, area uv.Rectangle) {
 
 	sections := primaryRow
 	if m.rlmInspection != nil {
-		runtimeSectionWidth := max(1, min(maxSectionWidth, width/3-2))
-		runtimeMaxItems := max(2, remainingHeight/2-3)
+		runtimeSectionWidth := max(1, min(maxSectionWidth, width/2-2))
+		runtimeMaxItems := max(2, remainingHeight/3)
 		runtimeSummary := m.runtimeSummaryInfo(runtimeSectionWidth, false)
 		runtimeBranches := m.runtimeBranchesInfo(runtimeSectionWidth, runtimeMaxItems, false)
-		runtimeTrace := m.runtimeTraceInfo(runtimeSectionWidth, runtimeMaxItems, false)
-		runtimeRow := lipgloss.JoinHorizontal(lipgloss.Top, runtimeSummary, " ", runtimeBranches, " ", runtimeTrace)
-		sections = lipgloss.JoinVertical(lipgloss.Left, primaryRow, "", runtimeRow)
+		runtimeTrace := m.runtimeTraceInfo(width, runtimeMaxItems, false)
+		runtimeRow := lipgloss.JoinHorizontal(lipgloss.Top, runtimeSummary, " ", runtimeBranches)
+		sections = lipgloss.JoinVertical(lipgloss.Left, primaryRow, "", runtimeRow, "", runtimeTrace)
 	}
 	uv.NewStyledString(
 		s.CompactDetails.View.

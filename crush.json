@@ -1,5 +1,10 @@
 {
   "$schema": "https://charm.land/crush.json",
+  "agents": {
+    "coder": {
+      "runtime": "rlm"
+    }
+  },
   "lsp": {
     "gopls": {
       "options": {

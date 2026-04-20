@@ -47,6 +47,11 @@ func TestEpisodeRunnerRunPersistsCompletionAndCheckpoint(t *testing.T) {
 	_, _, _, replay, err := store.LoadCheckpoint(context.Background(), "session-1", result.Checkpoint.BranchID, result.Checkpoint.ID)
 	require.NoError(t, err)
 	require.Equal(t, []string{"x := 1"}, replay)
+
+	trace, err := store.LoadCheckpointTrace(context.Background(), "session-1", result.Checkpoint.BranchID, result.Checkpoint.ID)
+	require.NoError(t, err)
+	require.Equal(t, "final_answer", trace.TerminationCause)
+	require.Len(t, trace.Steps, 1)
 }
 
 func TestEpisodeRunnerDoesNotNormalizeFallbackCompletion(t *testing.T) {

@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/crush/internal/ui/common"
+	"github.com/charmbracelet/crush/internal/ui/styles"
 	"github.com/charmbracelet/crush/internal/ui/util"
 	"github.com/charmbracelet/crush/internal/workspace"
 	"github.com/charmbracelet/x/ansi"
@@ -215,6 +216,9 @@ func (m *UI) runtimeSummaryInfo(width int, isSection bool) string {
 		cause := ansi.Truncate(inspection.TerminationCause, max(1, width-8), "...")
 		lines = append(lines, fmt.Sprintf("%s %s", t.Subtle.Render("Last:"), cause))
 	}
+	if inspection.ActiveTrace.Iterations > 0 {
+		lines = append(lines, fmt.Sprintf("%s %d", t.Subtle.Render("Steps:"), inspection.ActiveTrace.Iterations))
+	}
 	if m.runtimeActionsVisible() {
 		hint := ansi.Truncate("[ ] select, enter switch, r resume, ctrl+b fork", max(1, width), "...")
 		lines = append(lines, t.Subtle.Render(hint))
@@ -288,26 +292,162 @@ func (m *UI) runtimeTraceInfo(width, maxItems int, isSection bool) string {
 	if isSection {
 		title = common.Section(t, "Trace", width)
 	}
-	entries := m.rlmInspection.RecentJournal
+	trace := m.rlmInspection.ActiveTrace
+	if maxItems <= 0 {
+		maxItems = max(len(trace.Steps), len(m.rlmInspection.RecentJournal))
+	}
+
+	runtimeStyles := newRuntimeStyles(t)
+	sections := []string{runtimeTraceMeta(trace, t.Subtle, width)}
+	if len(trace.Steps) > 0 {
+		sections = append(sections, formatTraceSteps(trace, runtimeStyles, width, maxItems))
+	} else {
+		sections = append(sections, t.Subtle.Render("No persisted iteration steps yet"))
+	}
+	if events := runtimeEventsInfo(m.rlmInspection.RecentJournal, t, width, max(3, min(6, maxItems))); events != "" {
+		sections = append(sections, events)
+	}
+
+	body := lipgloss.JoinVertical(lipgloss.Left, sections...)
+	return lipgloss.NewStyle().Width(width).Render(fmt.Sprintf("%s\n\n%s", title, body))
+}
+
+func runtimeTraceMeta(trace workspace.RLMRuntimeTrace, subtle lipgloss.Style, width int) string {
+	lines := []string{}
+	if trace.TerminationCause != "" {
+		lines = append(lines, fmt.Sprintf("%s %s", subtle.Render("Termination:"), trace.TerminationCause))
+	}
+	if trace.Error != "" {
+		lines = append(lines, fmt.Sprintf("%s %s", subtle.Render("Error:"), ansi.Truncate(trace.Error, max(1, width-7), "...")))
+	}
+	lines = append(lines,
+		fmt.Sprintf("%s %d", subtle.Render("Iterations:"), trace.Iterations),
+		fmt.Sprintf("%s %d total | root %d | sub %d | subrlm %d", subtle.Render("Tokens:"), trace.Usage.TotalTokens, trace.RootUsage.TotalTokens, trace.SubUsage.TotalTokens, trace.SubRLMUsage.TotalTokens),
+		fmt.Sprintf("%s %d sub-LLM | %d sub-RLM | %d compressions | %d confidence", subtle.Render("Calls:"), trace.SubLLMCallCount, trace.SubRLMCallCount, trace.CompressionCount, trace.ConfidenceSignals),
+	)
+	if !trace.StartedAt.IsZero() {
+		lines = append(lines, fmt.Sprintf("%s %s", subtle.Render("Started:"), trace.StartedAt.Local().Format(time.RFC822)))
+	}
+	if !trace.CompletedAt.IsZero() {
+		lines = append(lines, fmt.Sprintf("%s %s", subtle.Render("Finished:"), trace.CompletedAt.Local().Format(time.RFC822)))
+	}
+	if trace.ProcessingTime > 0 {
+		lines = append(lines, fmt.Sprintf("%s %s", subtle.Render("Duration:"), trace.ProcessingTime.Round(time.Millisecond).String()))
+	}
+	if len(trace.RootSnapshots) > 0 {
+		lines = append(lines, formatRootSnapshots(trace.RootSnapshots, subtle, width))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+func formatRootSnapshots(snapshots []workspace.RLMRuntimeRootSnapshot, subtle lipgloss.Style, width int) string {
+	parts := make([]string, 0, len(snapshots))
+	for _, snapshot := range snapshots {
+		parts = append(parts, fmt.Sprintf("#%d %d/%d", snapshot.Iteration, snapshot.PromptTokens, snapshot.CompletionTokens))
+	}
+	line := fmt.Sprintf("%s %s", subtle.Render("Root per-step:"), strings.Join(parts, "  "))
+	return ansi.Truncate(line, max(1, width), "...")
+}
+
+func formatTraceSteps(trace workspace.RLMRuntimeTrace, t *stylesForRuntime, width, maxItems int) string {
+	steps := trace.Steps
+	if len(steps) == 0 {
+		return ""
+	}
+	if len(steps) > maxItems {
+		steps = steps[len(steps)-maxItems:]
+	}
+	blocks := make([]string, 0, len(steps))
+	for _, step := range steps {
+		blocks = append(blocks, formatTraceStep(step, t, width))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, blocks...)
+}
+
+type stylesForRuntime struct {
+	base   lipgloss.Style
+	subtle lipgloss.Style
+	panel  lipgloss.Style
+}
+
+func newRuntimeStyles(t *styles.Styles) *stylesForRuntime {
+	return &stylesForRuntime{
+		base:   t.Base,
+		subtle: t.Subtle,
+		panel:  t.PanelBase.Padding(0, 1),
+	}
+}
+
+func formatTraceStep(step workspace.RLMRuntimeTraceStep, t *stylesForRuntime, width int) string {
+	status := "ok"
+	if !step.Success {
+		status = "error"
+	}
+	header := fmt.Sprintf("#%d %s [%s] %s", step.Index, step.Action, status, step.Duration.Round(time.Millisecond))
+	lines := []string{t.base.Render(ansi.Truncate(header, max(1, width-2), "..."))}
+	if step.Thought != "" {
+		lines = append(lines, formatTraceField("thought", step.Thought, t, width))
+	}
+	if step.SubQuery != "" {
+		lines = append(lines, formatTraceField("subquery", step.SubQuery, t, width))
+	}
+	if step.Code != "" {
+		lines = append(lines, formatTraceField("code", step.Code, t, width))
+	}
+	if step.Observation != "" {
+		lines = append(lines, formatTraceField("observation", step.Observation, t, width))
+	}
+	if step.Error != "" {
+		lines = append(lines, formatTraceField("error", step.Error, t, width))
+	}
+	return t.panel.Width(width).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+}
+
+func formatTraceField(label, value string, t *stylesForRuntime, width int) string {
+	lines := truncateTraceLines(value, max(1, width-4), 4)
+	for i, line := range lines {
+		if i == 0 {
+			lines[i] = fmt.Sprintf("%s %s", t.subtle.Render(label+":"), line)
+			continue
+		}
+		lines[i] = "  " + line
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+func truncateTraceLines(value string, width, maxLines int) []string {
+	if maxLines <= 0 {
+		maxLines = 1
+	}
+	rawLines := strings.Split(strings.TrimSpace(value), "\n")
+	if len(rawLines) == 0 {
+		return []string{""}
+	}
+	out := make([]string, 0, min(len(rawLines), maxLines))
+	for i, line := range rawLines {
+		if i >= maxLines {
+			out = append(out, "...")
+			break
+		}
+		out = append(out, ansi.Truncate(line, max(1, width), "..."))
+	}
+	return out
+}
+
+func runtimeEventsInfo(entries []workspace.RLMRuntimeJournalEntry, t *styles.Styles, width, maxItems int) string {
 	if len(entries) == 0 {
-		return lipgloss.NewStyle().Width(width).Render(fmt.Sprintf("%s\n\n%s", title, t.Subtle.Render("No events")))
+		return ""
 	}
 	if maxItems <= 0 {
 		maxItems = len(entries)
 	}
-
-	lines := make([]string, 0, min(maxItems, len(entries)))
-	for i := len(entries) - 1; i >= 0 && len(lines) < maxItems; i-- {
+	lines := []string{t.Subtle.Render("Recent events:")}
+	for i := len(entries) - 1; i >= 0 && len(lines) <= maxItems; i-- {
 		entry := entries[i]
-		timeLabel := entry.Timestamp.Local().Format("15:04:05")
-		detail := formatRuntimeJournalEntry(entry)
-		line := fmt.Sprintf("%s %s", t.Subtle.Render(timeLabel), detail)
-		line = ansi.Truncate(line, max(1, width), "...")
-		lines = append(lines, line)
+		line := fmt.Sprintf("%s %s", t.Subtle.Render(entry.Timestamp.Local().Format("15:04:05")), formatRuntimeJournalEntry(entry))
+		lines = append(lines, ansi.Truncate(line, max(1, width), "..."))
 	}
-
-	body := lipgloss.JoinVertical(lipgloss.Left, lines...)
-	return lipgloss.NewStyle().Width(width).Render(fmt.Sprintf("%s\n\n%s", title, body))
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
 func formatRuntimeJournalEntry(entry workspace.RLMRuntimeJournalEntry) string {

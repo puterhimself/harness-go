@@ -418,7 +418,7 @@ type Config struct {
 
 	Tools Tools `json:"tools,omitzero" jsonschema:"description=Tool configurations"`
 
-	Agents map[string]Agent `json:"-"`
+	Agents map[string]Agent `json:"agents,omitempty" jsonschema:"description=Agent-specific runtime and tool configuration overrides"`
 }
 
 func (c *Config) EnabledProviders() []ProviderConfig {
@@ -540,6 +540,7 @@ func filterSlice(data []string, mask []string, include bool) []string {
 
 func (c *Config) SetupAgents() {
 	allowedTools := resolveAllowedTools(allToolNames(), c.Options.DisabledTools)
+	existingAgents := c.Agents
 
 	agents := map[string]Agent{
 		AgentCoder: {
@@ -564,7 +565,52 @@ func (c *Config) SetupAgents() {
 			AllowedMCP: map[string][]string{},
 		},
 	}
+	for id, agent := range agents {
+		agents[id] = mergeAgentConfig(agent, existingAgents[id])
+	}
 	c.Agents = agents
+}
+
+func mergeAgentConfig(base, override Agent) Agent {
+	if override.ID != "" {
+		base.ID = override.ID
+	}
+	if override.Name != "" {
+		base.Name = override.Name
+	}
+	if override.Description != "" {
+		base.Description = override.Description
+	}
+	if override.Runtime != "" {
+		base.Runtime = override.Runtime
+	}
+	if override.Disabled {
+		base.Disabled = true
+	}
+	if override.Model != "" {
+		base.Model = override.Model
+	}
+	if override.AllowedTools != nil {
+		base.AllowedTools = slices.Clone(override.AllowedTools)
+	}
+	if override.AllowedMCP != nil {
+		base.AllowedMCP = cloneAllowedMCP(override.AllowedMCP)
+	}
+	if override.ContextPaths != nil {
+		base.ContextPaths = slices.Clone(override.ContextPaths)
+	}
+	return base
+}
+
+func cloneAllowedMCP(allowed map[string][]string) map[string][]string {
+	if allowed == nil {
+		return nil
+	}
+	cloned := make(map[string][]string, len(allowed))
+	for key, values := range allowed {
+		cloned[key] = slices.Clone(values)
+	}
+	return cloned
 }
 
 func (c *ProviderConfig) TestConnection(resolver VariableResolver) error {

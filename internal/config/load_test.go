@@ -24,7 +24,7 @@ func TestMain(m *testing.M) {
 func TestConfig_LoadFromBytes(t *testing.T) {
 	data1 := []byte(`{"providers": {"openai": {"api_key": "key1", "base_url": "https://api.openai.com/v1"}}}`)
 	data2 := []byte(`{"providers": {"openai": {"api_key": "key2", "base_url": "https://api.openai.com/v2"}}}`)
-	data3 := []byte(`{"providers": {"openai": {}}}`)
+	data3 := []byte(`{"providers": {"openai": {}}, "agents": {"coder": {"runtime": "rlm"}}}`)
 
 	loadedConfig, err := loadFromBytes([][]byte{data1, data2, data3})
 
@@ -34,6 +34,7 @@ func TestConfig_LoadFromBytes(t *testing.T) {
 	pc, _ := loadedConfig.Providers.Get("openai")
 	require.Equal(t, "key2", pc.APIKey)
 	require.Equal(t, "https://api.openai.com/v2", pc.BaseURL)
+	require.Equal(t, "rlm", loadedConfig.Agents[AgentCoder].Runtime)
 }
 
 // testStore wraps a Config in a minimal ConfigStore for testing.
@@ -520,6 +521,34 @@ func TestConfig_setupAgentsWithEveryReadOnlyToolDisabled(t *testing.T) {
 	taskAgent, ok := cfg.Agents[AgentTask]
 	require.True(t, ok)
 	assert.Len(t, taskAgent.AllowedTools, 0)
+}
+
+func TestConfig_setupAgentsPreservesConfiguredOverrides(t *testing.T) {
+	cfg := &Config{
+		Options: &Options{
+			DisabledTools: []string{},
+			ContextPaths:  []string{"AGENTS.md"},
+		},
+		Agents: map[string]Agent{
+			AgentCoder: {
+				Runtime:      string(AgentRuntimeRLM),
+				AllowedTools: []string{"view"},
+				ContextPaths: []string{"CUSTOM.md"},
+			},
+		},
+	}
+
+	cfg.SetupAgents()
+	coderAgent, ok := cfg.Agents[AgentCoder]
+	require.True(t, ok)
+	assert.Equal(t, string(AgentRuntimeRLM), coderAgent.Runtime)
+	assert.Equal(t, []string{"view"}, coderAgent.AllowedTools)
+	assert.Equal(t, []string{"CUSTOM.md"}, coderAgent.ContextPaths)
+
+	taskAgent, ok := cfg.Agents[AgentTask]
+	require.True(t, ok)
+	assert.Equal(t, string(AgentRuntimeDefault), taskAgent.Runtime)
+	assert.Equal(t, []string{"AGENTS.md"}, taskAgent.ContextPaths)
 }
 
 func TestConfig_configureProvidersWithDisabledProvider(t *testing.T) {

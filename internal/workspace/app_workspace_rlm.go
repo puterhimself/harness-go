@@ -69,6 +69,30 @@ func (w *AppWorkspace) InspectRuntime(ctx context.Context, sessionID string, jou
 		})
 	}
 
+	rootSnapshots := make([]RLMRuntimeRootSnapshot, 0, len(inspection.ActiveTrace.RootSnapshots))
+	for _, snapshot := range inspection.ActiveTrace.RootSnapshots {
+		rootSnapshots = append(rootSnapshots, RLMRuntimeRootSnapshot{
+			Iteration:        snapshot.Iteration,
+			PromptTokens:     snapshot.PromptTokens,
+			CompletionTokens: snapshot.CompletionTokens,
+		})
+	}
+
+	steps := make([]RLMRuntimeTraceStep, 0, len(inspection.ActiveTrace.Steps))
+	for _, step := range inspection.ActiveTrace.Steps {
+		steps = append(steps, RLMRuntimeTraceStep{
+			Index:       step.Index,
+			Thought:     step.Thought,
+			Action:      step.Action,
+			Code:        step.Code,
+			SubQuery:    step.SubQuery,
+			Observation: step.Observation,
+			Duration:    step.Duration,
+			Success:     step.Success,
+			Error:       step.Error,
+		})
+	}
+
 	return RLMRuntimeInspection{
 		SessionID:         sessionID,
 		ActiveBranchID:    inspection.Runtime.ActiveBranchID,
@@ -86,6 +110,24 @@ func (w *AppWorkspace) InspectRuntime(ctx context.Context, sessionID string, jou
 		Branches:          branches,
 		Published:         published,
 		RecentJournal:     recent,
+		ActiveTrace: RLMRuntimeTrace{
+			StartedAt:         inspection.ActiveTrace.StartedAt,
+			CompletedAt:       inspection.ActiveTrace.CompletedAt,
+			ProcessingTime:    inspection.ActiveTrace.ProcessingTime,
+			Iterations:        inspection.ActiveTrace.Iterations,
+			Usage:             toRuntimeTokenUsage(inspection.ActiveTrace.Usage),
+			RootUsage:         toRuntimeTokenUsage(inspection.ActiveTrace.RootUsage),
+			SubUsage:          toRuntimeTokenUsage(inspection.ActiveTrace.SubUsage),
+			SubRLMUsage:       toRuntimeTokenUsage(inspection.ActiveTrace.SubRLMUsage),
+			RootSnapshots:     rootSnapshots,
+			SubLLMCallCount:   inspection.ActiveTrace.SubLLMCallCount,
+			SubRLMCallCount:   inspection.ActiveTrace.SubRLMCallCount,
+			ConfidenceSignals: inspection.ActiveTrace.ConfidenceSignals,
+			CompressionCount:  inspection.ActiveTrace.CompressionCount,
+			TerminationCause:  inspection.ActiveTrace.TerminationCause,
+			Error:             inspection.ActiveTrace.Error,
+			Steps:             steps,
+		},
 	}, nil
 }
 
@@ -144,4 +186,12 @@ var _ RLMRuntime = (*AppWorkspace)(nil)
 
 func IsRLMRuntimeUnavailable(err error) bool {
 	return errors.Is(err, ErrRLMRuntimeUnavailable)
+}
+
+func toRuntimeTokenUsage(usage rlmruntime.TraceTokenUsage) RLMRuntimeTokenUsage {
+	return RLMRuntimeTokenUsage{
+		PromptTokens:     usage.PromptTokens,
+		CompletionTokens: usage.CompletionTokens,
+		TotalTokens:      usage.TotalTokens,
+	}
 }

@@ -59,7 +59,7 @@ func TestManagerCheckpointAndRestoreBranchState(t *testing.T) {
 		"output_data":    map[string]any{"ok": true},
 	}))
 
-	cp, err := manager.CheckpointActive(ctx, runtime, []string{"done = true"}, NormalizedCompletion{Done: true, OutputMessage: "finished"})
+	cp, err := manager.CheckpointActive(ctx, runtime, []string{"done = true"}, NormalizedCompletion{Done: true, OutputMessage: "finished"}, EpisodeTrace{})
 	require.NoError(t, err)
 	require.NotEmpty(t, cp.ID)
 
@@ -96,7 +96,7 @@ func TestManagerRecoverSessionInjectsBridgeBeforeReplay(t *testing.T) {
 	_, err = runtime.REPL.Execute(ctx, `ToolCall("restore_tool", map[string]any{"phase": "original"})`)
 	require.NoError(t, err)
 
-	_, err = manager.CheckpointActive(ctx, runtime, []string{`ToolCall("restore_tool", map[string]any{"phase": "replay"})`}, NormalizedCompletion{})
+	_, err = manager.CheckpointActive(ctx, runtime, []string{`ToolCall("restore_tool", map[string]any{"phase": "replay"})`}, NormalizedCompletion{}, EpisodeTrace{})
 	require.NoError(t, err)
 	require.Equal(t, 1, calls)
 
@@ -121,7 +121,7 @@ func TestManagerForkAndSwitchBranch(t *testing.T) {
 	require.NoError(t, runtime.REPL.ImportState(map[string]any{
 		"branch_local": map[string]any{"x": "main"},
 	}))
-	_, err = manager.CheckpointActive(ctx, runtime, []string{"x := \"main\""}, NormalizedCompletion{Done: false})
+	_, err = manager.CheckpointActive(ctx, runtime, []string{"x := \"main\""}, NormalizedCompletion{Done: false}, EpisodeTrace{})
 	require.NoError(t, err)
 
 	branch, err := manager.ForkBranch(ctx, "session-1", "experiment")
@@ -158,7 +158,7 @@ func TestManagerSwitchBranchResetsREPLState(t *testing.T) {
 
 	_, err = runtime.REPL.Execute(ctx, `func mainOnly() string { return "main" }`)
 	require.NoError(t, err)
-	_, err = manager.CheckpointActive(ctx, runtime, []string{`func mainOnly() string { return "main" }`}, NormalizedCompletion{})
+	_, err = manager.CheckpointActive(ctx, runtime, []string{`func mainOnly() string { return "main" }`}, NormalizedCompletion{}, EpisodeTrace{})
 	require.NoError(t, err)
 
 	branch, err := manager.ForkBranch(ctx, "session-1", "child")
@@ -167,7 +167,7 @@ func TestManagerSwitchBranchResetsREPLState(t *testing.T) {
 
 	_, err = runtime.REPL.Execute(ctx, `func childOnly() string { return "child" }`)
 	require.NoError(t, err)
-	_, err = manager.CheckpointActive(ctx, runtime, []string{`func mainOnly() string { return "main" }`, `func childOnly() string { return "child" }`}, NormalizedCompletion{})
+	_, err = manager.CheckpointActive(ctx, runtime, []string{`func mainOnly() string { return "main" }`, `func childOnly() string { return "child" }`}, NormalizedCompletion{}, EpisodeTrace{})
 	require.NoError(t, err)
 
 	mainBranchID := runtime.Branches[branch.BranchID].ParentBranchID

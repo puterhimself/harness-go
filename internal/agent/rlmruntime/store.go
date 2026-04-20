@@ -30,8 +30,9 @@ type Store interface {
 	ListBranches(ctx context.Context, sessionID string) ([]BranchState, error)
 	LoadBranchHead(ctx context.Context, sessionID, branchID string) (BranchHead, error)
 	PromoteBranchHead(ctx context.Context, sessionID, branchID, checkpointID string) error
-	WriteCheckpoint(ctx context.Context, sessionID string, branch BranchState, runtimeState map[string]any, replay []string, completion NormalizedCompletion) (Checkpoint, error)
+	WriteCheckpoint(ctx context.Context, sessionID string, branch BranchState, runtimeState map[string]any, replay []string, completion NormalizedCompletion, trace EpisodeTrace) (Checkpoint, error)
 	LoadCheckpoint(ctx context.Context, sessionID, branchID, checkpointID string) (CheckpointManifest, map[string]any, NormalizedCompletion, []string, error)
+	LoadCheckpointTrace(ctx context.Context, sessionID, branchID, checkpointID string) (EpisodeTrace, error)
 	AppendJournal(ctx context.Context, sessionID, branchID string, entry JournalEntry) (int64, error)
 	ReadJournal(ctx context.Context, sessionID, branchID string, limit int) ([]JournalEntry, error)
 	PutArtifact(ctx context.Context, sessionID, branchID, name string, value any) (ArtifactRef, error)
@@ -198,7 +199,7 @@ func (s *FileStore) PromoteBranchHead(ctx context.Context, sessionID, branchID, 
 	return s.SaveBranch(ctx, sessionID, branch)
 }
 
-func (s *FileStore) WriteCheckpoint(ctx context.Context, sessionID string, branch BranchState, runtimeState map[string]any, replay []string, completion NormalizedCompletion) (Checkpoint, error) {
+func (s *FileStore) WriteCheckpoint(ctx context.Context, sessionID string, branch BranchState, runtimeState map[string]any, replay []string, completion NormalizedCompletion, trace EpisodeTrace) (Checkpoint, error) {
 	if err := ctx.Err(); err != nil {
 		return Checkpoint{}, err
 	}
@@ -211,6 +212,7 @@ func (s *FileStore) WriteCheckpoint(ctx context.Context, sessionID string, branc
 	statePath := filepath.Join(cpDir, "state.json")
 	replayPath := filepath.Join(cpDir, "replay.go")
 	completionPath := filepath.Join(cpDir, "completion.json")
+	tracePath := filepath.Join(cpDir, "trace.json")
 	artifactRoot := s.artifactsDir(sessionID, branch.BranchID)
 
 	manifest := CheckpointManifest{
@@ -222,6 +224,7 @@ func (s *FileStore) WriteCheckpoint(ctx context.Context, sessionID string, branc
 		ReplayPath:     replayPath,
 		StatePath:      statePath,
 		CompletionPath: completionPath,
+		TracePath:      tracePath,
 		ArtifactRoot:   artifactRoot,
 		JournalOffset:  branch.JournalOffset,
 	}
@@ -230,6 +233,9 @@ func (s *FileStore) WriteCheckpoint(ctx context.Context, sessionID string, branc
 		return Checkpoint{}, err
 	}
 	if err := atomicWriteJSON(completionPath, completion); err != nil {
+		return Checkpoint{}, err
+	}
+	if err := atomicWriteJSON(tracePath, trace); err != nil {
 		return Checkpoint{}, err
 	}
 	if err := atomicWriteJSON(replayPath, replay); err != nil {
@@ -246,6 +252,7 @@ func (s *FileStore) WriteCheckpoint(ctx context.Context, sessionID string, branc
 		ManifestPath: manifestPath,
 		StatePath:    statePath,
 		ReplayPath:   replayPath,
+		TracePath:    tracePath,
 		ArtifactRoot: artifactRoot,
 	}, nil
 }
@@ -282,6 +289,33 @@ func (s *FileStore) LoadCheckpoint(ctx context.Context, sessionID, branchID, che
 	}
 
 	return manifest, state, completion, replayLines, nil
+}
+
+func (s *FileStore) LoadCheckpointTrace(ctx context.Context, sessionID, branchID, checkpointID string) (EpisodeTrace, error) {
+	if err := ctx.Err(); err != nil {
+		return EpisodeTrace{}, err
+	}
+
+	manifestPath := s.checkpointManifestPath(sessionID, branchID, checkpointID)
+	var manifest CheckpointManifest
+	if err := readJSON(manifestPath, &manifest); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return EpisodeTrace{}, ErrCheckpointNotFound
+		}
+		return EpisodeTrace{}, err
+	}
+	if manifest.TracePath == "" {
+		return EpisodeTrace{}, nil
+	}
+
+	trace := EpisodeTrace{}
+	if err := readJSON(manifest.TracePath, &trace); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return EpisodeTrace{}, nil
+		}
+		return EpisodeTrace{}, err
+	}
+	return trace, nil
 }
 
 func (s *FileStore) AppendJournal(ctx context.Context, sessionID, branchID string, entry JournalEntry) (int64, error) {
